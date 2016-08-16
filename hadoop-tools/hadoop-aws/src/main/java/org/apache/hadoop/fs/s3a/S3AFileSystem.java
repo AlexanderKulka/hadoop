@@ -18,50 +18,108 @@
 
 package org.apache.hadoop.fs.s3a;
 
+import static org.apache.hadoop.fs.s3a.Constants.AWS_CREDENTIALS_PROVIDER;
+import static org.apache.hadoop.fs.s3a.Constants.CANNED_ACL;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_CANNED_ACL;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_ESTABLISH_TIMEOUT;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_FAST_UPLOAD;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_KEEPALIVE_TIME;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_MAXIMUM_CONNECTIONS;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_MAX_ERROR_RETRIES;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_MAX_PAGING_KEYS;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_MAX_THREADS;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_MAX_TOTAL_TASKS;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_MIN_MULTIPART_THRESHOLD;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_MULTIPART_SIZE;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_PURGE_EXISTING_MULTIPART;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_PURGE_EXISTING_MULTIPART_AGE;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_READAHEAD_RANGE;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_SECURE_CONNECTIONS;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_SOCKET_RECV_BUFFER;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_SOCKET_SEND_BUFFER;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_SOCKET_TIMEOUT;
+import static org.apache.hadoop.fs.s3a.Constants.ENABLE_MULTI_DELETE;
+import static org.apache.hadoop.fs.s3a.Constants.ENDPOINT;
+import static org.apache.hadoop.fs.s3a.Constants.ESTABLISH_TIMEOUT;
+import static org.apache.hadoop.fs.s3a.Constants.FAST_UPLOAD;
+import static org.apache.hadoop.fs.s3a.Constants.FS_S3A_BLOCK_SIZE;
+import static org.apache.hadoop.fs.s3a.Constants.INPUT_FADVISE;
+import static org.apache.hadoop.fs.s3a.Constants.INPUT_FADV_NORMAL;
+import static org.apache.hadoop.fs.s3a.Constants.KEEPALIVE_TIME;
+import static org.apache.hadoop.fs.s3a.Constants.MAXIMUM_CONNECTIONS;
+import static org.apache.hadoop.fs.s3a.Constants.MAX_ERROR_RETRIES;
+import static org.apache.hadoop.fs.s3a.Constants.MAX_PAGING_KEYS;
+import static org.apache.hadoop.fs.s3a.Constants.MAX_THREADS;
+import static org.apache.hadoop.fs.s3a.Constants.MAX_TOTAL_TASKS;
+import static org.apache.hadoop.fs.s3a.Constants.MIN_MULTIPART_THRESHOLD;
+import static org.apache.hadoop.fs.s3a.Constants.MULTIPART_SIZE;
+import static org.apache.hadoop.fs.s3a.Constants.PATH_STYLE_ACCESS;
+import static org.apache.hadoop.fs.s3a.Constants.PROXY_DOMAIN;
+import static org.apache.hadoop.fs.s3a.Constants.PROXY_HOST;
+import static org.apache.hadoop.fs.s3a.Constants.PROXY_PASSWORD;
+import static org.apache.hadoop.fs.s3a.Constants.PROXY_PORT;
+import static org.apache.hadoop.fs.s3a.Constants.PROXY_USERNAME;
+import static org.apache.hadoop.fs.s3a.Constants.PROXY_WORKSTATION;
+import static org.apache.hadoop.fs.s3a.Constants.PURGE_EXISTING_MULTIPART;
+import static org.apache.hadoop.fs.s3a.Constants.PURGE_EXISTING_MULTIPART_AGE;
+import static org.apache.hadoop.fs.s3a.Constants.READAHEAD_RANGE;
+import static org.apache.hadoop.fs.s3a.Constants.S3N_FOLDER_SUFFIX;
+import static org.apache.hadoop.fs.s3a.Constants.SECURE_CONNECTIONS;
+import static org.apache.hadoop.fs.s3a.Constants.SERVER_SIDE_ENCRYPTION_ALGORITHM;
+import static org.apache.hadoop.fs.s3a.Constants.SIGNING_ALGORITHM;
+import static org.apache.hadoop.fs.s3a.Constants.SOCKET_RECV_BUFFER;
+import static org.apache.hadoop.fs.s3a.Constants.SOCKET_SEND_BUFFER;
+import static org.apache.hadoop.fs.s3a.Constants.SOCKET_TIMEOUT;
+import static org.apache.hadoop.fs.s3a.Constants.USER_AGENT_PREFIX;
+import static org.apache.hadoop.fs.s3a.S3AUtils.createFileStatus;
+import static org.apache.hadoop.fs.s3a.S3AUtils.dateToLong;
+import static org.apache.hadoop.fs.s3a.S3AUtils.getAWSAccessKeys;
+import static org.apache.hadoop.fs.s3a.S3AUtils.objectRepresentsDirectory;
+import static org.apache.hadoop.fs.s3a.S3AUtils.stringify;
+import static org.apache.hadoop.fs.s3a.S3AUtils.translateException;
+import static org.apache.hadoop.fs.s3a.Statistic.INVOCATION_COPY_FROM_LOCAL_FILE;
+import static org.apache.hadoop.fs.s3a.Statistic.INVOCATION_EXISTS;
+import static org.apache.hadoop.fs.s3a.Statistic.INVOCATION_GET_FILE_STATUS;
+import static org.apache.hadoop.fs.s3a.Statistic.INVOCATION_GLOB_STATUS;
+import static org.apache.hadoop.fs.s3a.Statistic.INVOCATION_IS_DIRECTORY;
+import static org.apache.hadoop.fs.s3a.Statistic.INVOCATION_IS_FILE;
+import static org.apache.hadoop.fs.s3a.Statistic.INVOCATION_LIST_FILES;
+import static org.apache.hadoop.fs.s3a.Statistic.INVOCATION_LIST_LOCATED_STATUS;
+import static org.apache.hadoop.fs.s3a.Statistic.INVOCATION_LIST_STATUS;
+import static org.apache.hadoop.fs.s3a.Statistic.INVOCATION_MKDIRS;
+import static org.apache.hadoop.fs.s3a.Statistic.INVOCATION_RENAME;
+import static org.apache.hadoop.fs.s3a.Statistic.OBJECT_DELETE_REQUESTS;
+import static org.apache.hadoop.fs.s3a.Statistic.OBJECT_LIST_REQUESTS;
+import static org.apache.hadoop.fs.s3a.Statistic.OBJECT_METADATA_REQUESTS;
+import static org.apache.hadoop.fs.s3a.Statistic.OBJECT_PUT_BYTES;
+import static org.apache.hadoop.fs.s3a.Statistic.OBJECT_PUT_REQUESTS;
+
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.net.URI;
+import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.SecureRandom;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.Protocol;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.AWSCredentialsProviderChain;
-import com.amazonaws.auth.InstanceProfileCredentialsProvider;
-import com.amazonaws.services.s3.AmazonS3Client;
-import com.amazonaws.services.s3.S3ClientOptions;
-import com.amazonaws.services.s3.model.AmazonS3Exception;
-import com.amazonaws.services.s3.model.CannedAccessControlList;
-import com.amazonaws.services.s3.model.DeleteObjectsRequest;
-import com.amazonaws.services.s3.model.ListObjectsRequest;
-import com.amazonaws.services.s3.model.ObjectListing;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.PutObjectRequest;
-import com.amazonaws.services.s3.model.CopyObjectRequest;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
-import com.amazonaws.services.s3.model.UploadPartRequest;
-import com.amazonaws.services.s3.model.UploadPartResult;
-import com.amazonaws.services.s3.transfer.Copy;
-import com.amazonaws.services.s3.transfer.TransferManager;
-import com.amazonaws.services.s3.transfer.TransferManagerConfiguration;
-import com.amazonaws.services.s3.transfer.Upload;
-import com.amazonaws.event.ProgressListener;
-import com.amazonaws.event.ProgressEvent;
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
-
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
@@ -82,13 +140,42 @@ import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.s3native.S3xLoginHelper;
 import org.apache.hadoop.util.Progressable;
 import org.apache.hadoop.util.VersionInfo;
-
-import static org.apache.hadoop.fs.s3a.Constants.*;
-import static org.apache.hadoop.fs.s3a.S3AUtils.*;
-import static org.apache.hadoop.fs.s3a.Statistic.*;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.amazonaws.AmazonClientException;
+import com.amazonaws.AmazonServiceException;
+import com.amazonaws.ClientConfiguration;
+import com.amazonaws.Protocol;
+import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.AWSCredentialsProviderChain;
+import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
+import com.amazonaws.auth.InstanceProfileCredentialsProvider;
+import com.amazonaws.event.ProgressEvent;
+import com.amazonaws.event.ProgressListener;
+import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.AmazonS3EncryptionClient;
+import com.amazonaws.services.s3.S3ClientOptions;
+import com.amazonaws.services.s3.model.AmazonS3Exception;
+import com.amazonaws.services.s3.model.CannedAccessControlList;
+import com.amazonaws.services.s3.model.CopyObjectRequest;
+import com.amazonaws.services.s3.model.CryptoConfiguration;
+import com.amazonaws.services.s3.model.DeleteObjectsRequest;
+import com.amazonaws.services.s3.model.EncryptionMaterials;
+import com.amazonaws.services.s3.model.ListObjectsRequest;
+import com.amazonaws.services.s3.model.ObjectListing;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.amazonaws.services.s3.model.StaticEncryptionMaterialsProvider;
+import com.amazonaws.services.s3.model.UploadPartRequest;
+import com.amazonaws.services.s3.model.UploadPartResult;
+import com.amazonaws.services.s3.transfer.Copy;
+import com.amazonaws.services.s3.transfer.TransferManager;
+import com.amazonaws.services.s3.transfer.TransferManagerConfiguration;
+import com.amazonaws.services.s3.transfer.Upload;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 
 /**
  * The core S3A Filesystem implementation.
@@ -112,7 +199,7 @@ public class S3AFileSystem extends FileSystem {
   public static final int DEFAULT_BLOCKSIZE = 32 * 1024 * 1024;
   private URI uri;
   private Path workingDir;
-  private AmazonS3Client s3;
+  private AmazonS3EncryptionClient s3;
   private String bucket;
   private int maxKeys;
   private long partSize;
@@ -237,7 +324,13 @@ public class S3AFileSystem extends FileSystem {
           conf.getTrimmed(INPUT_FADVISE, INPUT_FADV_NORMAL));
     } catch (AmazonClientException e) {
       throw translateException("initializing ", new Path(name), e);
-    }
+    } catch (IllegalArgumentException e) {
+        LOG.error(e.getMessage());
+	} catch (InvalidKeySpecException e) {
+		LOG.error(e.getMessage());
+	} catch (NoSuchAlgorithmException e) {
+		LOG.error(e.getMessage());
+	}
 
   }
 
@@ -340,8 +433,27 @@ public class S3AFileSystem extends FileSystem {
 
   private void initAmazonS3Client(Configuration conf,
       AWSCredentialsProvider credentials, ClientConfiguration awsConf)
-      throws IllegalArgumentException {
-    s3 = new AmazonS3Client(credentials, awsConf);
+      throws IllegalArgumentException, IOException, InvalidKeySpecException, NoSuchAlgorithmException {
+	  String keyDir  = System.getProperty("java.io.tmpdir");
+      
+      // Load keys from files
+      byte[] bytes = FileUtils.readFileToByteArray(new File(
+              keyDir + "/private.key"));
+      KeyFactory kf = KeyFactory.getInstance("RSA");
+      PKCS8EncodedKeySpec ks = new PKCS8EncodedKeySpec(bytes);
+      PrivateKey pk = kf.generatePrivate(ks);
+      
+      // Create public key based off the access key
+      bytes = FileUtils.readFileToByteArray(new File(keyDir + "/public.key"));
+      PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(
+              new X509EncodedKeySpec(bytes));
+      
+      KeyPair loadedKeyPair = new KeyPair(publicKey, pk);
+      EncryptionMaterials encryptionMaterials = new EncryptionMaterials(
+              loadedKeyPair);
+	  
+      s3 = new AmazonS3EncryptionClient(credentials, new StaticEncryptionMaterialsProvider(encryptionMaterials), awsConf, new CryptoConfiguration());
+      
     String endPoint = conf.getTrimmed(ENDPOINT, "");
     if (!endPoint.isEmpty()) {
       try {
